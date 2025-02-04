@@ -10,7 +10,7 @@ import chainlit as cl
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.vectorstores import Chroma
-from langchain.schema import HumanMessage, SystemMessage
+from langchain.schema.messages import HumanMessage, SystemMessage
 from langchain_google_genai import GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI
 import pdfplumber
 import fitz
@@ -18,6 +18,8 @@ import fitz
 warnings.filterwarnings("ignore")
 
 CACHE_FILE = "chat_history.pkl"
+STATIC_DIR = "static/uploads"
+os.makedirs(STATIC_DIR, exist_ok=True)
 
 # Ensure Google API Key is set
 GOOGLE_API_KEY_ENV = "GOOGLE_API_KEY"
@@ -165,19 +167,20 @@ async def handle_chat_start():
         ).send()
         await cl.Message(content="Processing!!!").send()
     file = files[0]
-    await cl.Message(
-        content=f"`{file.name}` processing !"
-    ).send()
-    print("-----------------------------------------------")
-    processor = DocumentProcessor(file.path)
+    file_path = os.path.join(STATIC_DIR, file.name)
+    with open(file_path, "wb") as f:
+        f.write(file.content)
+    
+    await cl.Message(content=f"`{file.name}` uploaded and being processed!").send()
+    
+    processor = DocumentProcessor(file_path)
     processor.process()
     retriever = processor.get_retriever()
-
-    query_handler = QueryHandler(retriever, file.name)
+    
+    query_handler = QueryHandler(retriever, file_path)
     cl.user_session.set("query_handler", query_handler)
-    if file:
-        await cl.Message(content=f"`{file.name}` uploaded, it contains").send()
-    await cl.Message(content = "Processing complete. You can now ask questions!").send()  # Update the previously sent message
+    
+    await cl.Message(content="Processing complete. You can now ask questions!").send()
 
 
 @cl.on_message
